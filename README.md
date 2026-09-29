@@ -1,9 +1,18 @@
 # animated-flow-diagram
 
 A Claude Code skill that turns a plain-language prompt into a single self-contained,
-animated HTML flow diagram: pastel rounded nodes in themed panels, rounded elbow arrows,
-dots travelling along the edges, glowing nodes as the flow arrives, and alternating
-outcomes on each loop. No dependencies, no build step.
+animated HTML flow diagram with rounded elbow arrows, particles travelling along the
+edges, and nodes that glow as the flow arrives. No dependencies, no build step.
+
+Three themes:
+
+- **dark** (default): dark glass cards with icons, grouped lanes, comet particles.
+  See `examples/rag-pipeline-dark.html`.
+- **light**: the same modern look on a clean light page. See `examples/rag-pipeline-light.html`.
+- **whiteboard**: hand-drawn pastel boxes in themed panels, with alternating outcomes on each
+  loop. See `examples/rag-pipeline.html`.
+
+Say "dark", "light" or "whiteboard" in your prompt to choose.
 
 ## Install
 
@@ -36,9 +45,9 @@ Or call it directly: `/animated-flow-diagram <description>`.
 ## How it works
 
 `skills/animated-flow-diagram/assets/template.html` contains a fixed drawing engine and a
-`SPEC` object at the top (panels, nodes, edges, timelines). Claude copies the template and
-rewrites only `SPEC`. See `SKILL.md` for the style, layout and timing rules, and
-`examples/` for a finished single-panel, left-to-right diagram.
+`SPEC` object at the top (panels, nodes, edges, timelines) for each theme (`template.html`,
+`template-dark.html`, `template-light.html`). Claude copies the template and rewrites only `SPEC`. See `SKILL.md`
+for the style, layout and timing rules, and `examples/` for the same diagram in both themes.
 
 ## License
 
