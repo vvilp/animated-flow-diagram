@@ -10,14 +10,14 @@ outcomes on each loop. No dependencies, no build step.
 In Claude Code:
 
 ```
-/plugin marketplace add <github-user>/animated-flow-diagram
+/plugin marketplace add vvilp/animated-flow-diagram
 /plugin install animated-flow-diagram@animated-flow-diagram
 ```
 
 Or without the plugin system:
 
 ```
-git clone https://github.com/<github-user>/animated-flow-diagram /tmp/afd
+git clone https://github.com/vvilp/animated-flow-diagram /tmp/afd
 cp -R /tmp/afd/skills/animated-flow-diagram ~/.claude/skills/
 ```
 
