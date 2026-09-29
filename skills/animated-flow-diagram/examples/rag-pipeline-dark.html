@@ -8,14 +8,9 @@
   :root { --bg:#07090f; --ink:#f1f3f9; --muted:#8a92a8; }
   html,body { margin:0; min-height:100%; background:var(--bg); color:var(--ink);
     font-family:ui-sans-serif,-apple-system,"Inter","SF Pro Text",system-ui,sans-serif; }
-  body { min-height:100vh; background:
-      radial-gradient(60% 50% at 15% 0%, rgba(56,189,248,.14), transparent 70%),
-      radial-gradient(50% 50% at 95% 100%, rgba(167,110,255,.16), transparent 70%),
-      var(--bg); }
+  body { min-height:100vh; }
   .wrap { max-width:1180px; margin:0 auto; padding:clamp(16px,4vw,44px) 16px; }
-  .card { border-radius:24px; padding:6px; border:1px solid rgba(255,255,255,.08);
-    background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.015));
-    box-shadow:0 30px 80px -30px rgba(0,0,0,.8), inset 0 1px 0 rgba(255,255,255,.06); }
+  .card { border-radius:24px; padding:6px; border:1px solid rgba(255,255,255,.08); background:rgba(255,255,255,.03); }
   svg { width:100%; height:auto; display:block; }
   .title { font:600 14px ui-sans-serif,-apple-system,"Inter",system-ui,sans-serif; fill:#f1f3f9; }
   .sub   { font:500 10.5px ui-monospace,"SF Mono",Menlo,monospace; fill:#8a92a8; }
@@ -124,22 +119,9 @@ function markerFor(tone) {
   el("path",{d:"M2 1.5 L7.5 5 L2 8.5",fill:"none",stroke:TONE[tone],"stroke-width":1.6,"stroke-linecap":"round","stroke-linejoin":"round",opacity:.85},m);
   return marker[tone] = `url(#${id})`;
 }
-const laneGrad = t => {
-  const id = "lg" + t, g = el("linearGradient",{id,x1:0,y1:0,x2:1,y2:1},defs);
-  el("stop",{offset:0,"stop-color":TONE[t],"stop-opacity":.09},g);
-  el("stop",{offset:1,"stop-color":TONE[t],"stop-opacity":.015},g);
-  return `url(#${id})`;
-};
-const strokeGrad = t => {
-  const id = "sg" + t, g = el("linearGradient",{id,x1:0,y1:0,x2:0,y2:1},defs);
-  el("stop",{offset:0,"stop-color":TONE[t],"stop-opacity":.75},g);
-  el("stop",{offset:1,"stop-color":TONE[t],"stop-opacity":.18},g);
-  return `url(#${id})`;
-};
-
 /* ---- lanes ---- */
 SPEC.lanes.forEach(l => {
-  el("rect",{x:l.x,y:l.y,width:l.w,height:l.h,rx:20,fill:laneGrad(l.tone),stroke:hexA(TONE[l.tone],.16),"stroke-width":1});
+  el("rect",{x:l.x,y:l.y,width:l.w,height:l.h,rx:20,fill:hexA(TONE[l.tone],.06),stroke:hexA(TONE[l.tone],.28),"stroke-width":.75});
   el("circle",{cx:l.x+28,cy:l.y+27,r:3.5,fill:TONE[l.tone]});
   el("text",{x:l.x+40,y:l.y+31,class:"lane"},svg,l.title);
 });
@@ -175,11 +157,10 @@ const nodes = {};
 SPEC.nodes.forEach(n => {
   const c = TONE[n.tone], g = el("g");
   const glow = el("rect",{x:n.x,y:n.y,width:n.w,height:n.h,rx:16,fill:c,opacity:0,filter:"url(#soft)"},g);
-  el("rect",{x:n.x,y:n.y+6,width:n.w,height:n.h,rx:16,fill:"#000",opacity:.35,filter:"url(#tight)"},g);
   el("rect",{x:n.x,y:n.y,width:n.w,height:n.h,rx:16,fill:"#0e121c"},g);
   const tint = el("rect",{x:n.x,y:n.y,width:n.w,height:n.h,rx:16,fill:c,opacity:.05},g);
-  const edge = el("rect",{x:n.x+.5,y:n.y+.5,width:n.w-1,height:n.h-1,rx:15.5,fill:"none",stroke:strokeGrad(n.tone),"stroke-width":1},g);
-  const ring = el("rect",{x:n.x+.5,y:n.y+.5,width:n.w-1,height:n.h-1,rx:15.5,fill:"none",stroke:c,"stroke-width":1.6,opacity:0},g);
+  const edge = el("rect",{x:n.x+.5,y:n.y+.5,width:n.w-1,height:n.h-1,rx:15.5,fill:"none",stroke:c,"stroke-width":.75},g);
+  const ring = el("rect",{x:n.x+.5,y:n.y+.5,width:n.w-1,height:n.h-1,rx:15.5,fill:"none",stroke:c,"stroke-width":1.1,opacity:0},g);
   // icon chip
   const cx = n.x + 16, cy = n.y + n.h/2 - 18;
   el("rect",{x:cx,y:cy,width:36,height:36,rx:11,fill:hexA(c,.14),stroke:hexA(c,.35),"stroke-width":1},g);
