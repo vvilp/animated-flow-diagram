@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RAG Pipeline (pixel)</title>
+<style>
+  :root { --bg:#100c24; }
+  html,body { margin:0; min-height:100%; background:var(--bg); }
+  body { min-height:100vh; background-image:conic-gradient(#140f2e 25%, transparent 0 50%, #140f2e 0 75%, transparent 0);
+         background-size:24px 24px; }
+  .wrap { max-width:1560px; margin:0 auto; padding:clamp(12px,3vw,36px) 12px; }
+  svg { width:100%; height:auto; display:block; shape-rendering:crispEdges; }
+  .flow { animation:march .6s steps(4) infinite; }
+  @keyframes march { to { stroke-dashoffset:-12; } }
+  @media (prefers-reduced-motion: reduce) { .flow { animation:none; } }
+</style>
+</head>
+<body>
+<div class="wrap"><svg id="d" role="img"></svg></div>
+
+<script>
+/* =====================================================================
+   SPEC — the only part you should need to edit.
+   Nodes: {x,y} is the top-left corner. icon = key of ICONS below.
+   The pixel font is UPPERCASE 5×7: keep `t` to ~6 chars, `s` to ~10.
+   ===================================================================== */
+const SPEC = {
+  label: "RAG pipeline: offline indexing feeds online query answering",
+  view: [1560, 660],
+  lanes: [
+    { x:20, y:20,  w:1520, h:210, tone:"cyan",   title:"INDEXING · OFFLINE" },
+    { x:20, y:290, w:1520, h:350, tone:"violet", title:"QUERY · ONLINE" },
+  ],
+  nodes: [
+    { id:"docs",  x:70,   y:104, w:190, h:84, tone:"cyan",   icon:"doc",    t:"DOCS",    s:"PDF · WEB" },
+    { id:"chunk", x:325,  y:104, w:190, h:84, tone:"cyan",   icon:"grid",   t:"CHUNK",   s:"512 TOKENS" },
+    { id:"emb1",  x:580,  y:104, w:190, h:84, tone:"cyan",   icon:"embed",  t:"EMBED",   s:"TO VECTORS" },
+    { id:"vdb",   x:835,  y:104, w:200, h:84, tone:"cyan",   icon:"db",     t:"STORE",   s:"HNSW INDEX" },
+
+    { id:"q",     x:70,   y:446, w:180, h:84, tone:"violet", icon:"search", t:"QUERY",   s:"FREE TEXT" },
+    { id:"emb2",  x:315,  y:446, w:180, h:84, tone:"violet", icon:"embed",  t:"EMBED",   s:"SAME MODEL" },
+    { id:"vec",   x:580,  y:372, w:200, h:84, tone:"blue",   icon:"vector", t:"VECTOR",  s:"TOP-K" },
+    { id:"kw",    x:580,  y:520, w:200, h:84, tone:"blue",   icon:"text",   t:"KEYWORD", s:"BM25" },
+    { id:"rank",  x:835,  y:446, w:180, h:84, tone:"violet", icon:"rank",   t:"RERANK",  s:"RESCORE" },
+    { id:"llm",   x:1090, y:446, w:170, h:84, tone:"amber",  icon:"spark",  t:"LLM",     s:"GROUNDED" },
+    { id:"ans",   x:1320, y:446, w:180, h:84, tone:"green",  icon:"check",  t:"ANSWER",  s:"CITED" },
+  ],
+  edges: [
+    { id:"a1", from:"docs",  to:"chunk", tone:"cyan" },
+    { id:"a2", from:"chunk", to:"emb1",  tone:"cyan" },
+    { id:"a3", from:"emb1",  to:"vdb",   tone:"cyan" },
+    { id:"lk", from:"vdb",   to:"vec",   tone:"blue", mode:"down", label:"LOOKUP", mid:260 },
+    { id:"b1", from:"q",     to:"emb2",  tone:"violet" },
+    { id:"b2", from:"emb2",  to:"vec",   tone:"violet", label:"DENSE" },
+    { id:"b3", from:"emb2",  to:"kw",    tone:"violet", label:"SPARSE" },
+    { id:"b4", from:"vec",   to:"rank",  tone:"violet" },
+    { id:"b5", from:"kw",    to:"rank",  tone:"violet" },
+    { id:"b6", from:"rank",  to:"llm",   tone:"amber" },
+    { id:"b7", from:"llm",   to:"ans",   tone:"green" },
+  ],
+  // [edgeId, startSec, durationSec]
+  timeline: { cycle:9.5, steps:[
+    ["a1",.3,.8], ["a2",1.1,.8], ["a3",1.9,.8],
+    ["lk",3.2,1.0],
+    ["b1",3.4,.7], ["b2",4.1,.8], ["b3",4.1,.8],
+    ["b4",4.9,.7], ["b5",4.9,.7], ["b6",5.7,.7], ["b7",6.5,.8],
+  ]},
+};
+
+/* =====================================================================
+   ENGINE — no edits needed below this line.
+   ===================================================================== */
+const NS = "http://www.w3.org/2000/svg";
+const svg = document.getElementById("d");
+const TONE = { cyan:"#4de1d2", blue:"#5aa0ff", violet:"#b28dff", amber:"#ffcc4d", green:"#6cf07a" };
+const C = { ink:"#f4f0ff", muted:"#a79fd6", dark:"#14102b", lane:"#1d1740", node:"#2a2158",
+            edge:"#6a5ec0", shadow:"#0a0718", laneBorder:"#3b3270", coin:"#ffd84d" };
+const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/* 5×7 bitmap font: one 5-bit int per row, top to bottom. */
+const FONT = {
+  A:[14,17,17,31,17,17,17], B:[30,17,17,30,17,17,30], C:[14,17,16,16,16,17,14], D:[30,17,17,17,17,17,30],
+  E:[31,16,16,30,16,16,31], F:[31,16,16,30,16,16,16], G:[14,17,16,23,17,17,15], H:[17,17,17,31,17,17,17],
+  I:[14,4,4,4,4,4,14],      J:[7,2,2,2,2,18,12],      K:[17,18,20,24,20,18,17], L:[16,16,16,16,16,16,31],
+  M:[17,27,21,21,17,17,17], N:[17,17,25,21,19,17,17], O:[14,17,17,17,17,17,14], P:[30,17,17,30,16,16,16],
+  Q:[14,17,17,17,21,18,13], R:[30,17,17,30,20,18,17], S:[15,16,16,14,1,1,30],   T:[31,4,4,4,4,4,4],
+  U:[17,17,17,17,17,17,14], V:[17,17,17,17,17,10,4],  W:[17,17,17,21,21,27,17], X:[17,17,10,4,10,17,17],
+  Y:[17,17,10,4,4,4,4],     Z:[31,1,2,4,8,16,31],
+  0:[14,17,19,21,25,17,14], 1:[4,12,4,4,4,4,14],      2:[14,17,1,2,4,8,31],     3:[31,2,4,2,1,17,14],
+  4:[2,6,10,18,31,2,2],     5:[31,16,30,1,1,17,14],   6:[6,8,16,30,17,17,14],   7:[31,1,2,4,8,8,8],
+  8:[14,17,17,14,17,17,14], 9:[14,17,17,15,1,2,12],
+  " ":[0,0,0,0,0,0,0], ".":[0,0,0,0,0,12,12], ",":[0,0,0,0,12,4,8], "-":[0,0,0,31,0,0,0], "+":[0,4,4,31,4,4,0],
+  ":":[0,12,12,0,12,12,0], "/":[1,1,2,4,8,16,16], "(":[2,4,8,8,8,4,2], ")":[8,4,2,2,2,4,8],
+  ">":[8,4,2,1,2,4,8], "<":[2,4,8,16,8,4,2], "·":[0,0,0,4,0,0,0], "→":[0,4,2,31,2,4,0], "?":[14,17,1,2,4,0,4],
+};
+const textW = (str, P) => str.length * 6 * P - P;
+function pxText(str, x, y, P, fill, parent = svg) {
+  let d = "";
+  [...str.toUpperCase()].forEach((ch, i) => {
+    (FONT[ch] || FONT["?"]).forEach((row, r) => {
+      for (let c = 0; c < 5; c++) {
+        let run = 0; while (c + run < 5 && row >> (4 - c - run) & 1) run++;
+        if (run) { d += `M${x + (i*6 + c)*P} ${y + r*P}h${run*P}v${P}h${-run*P}z`; c += run; }
+      }
+    });
+  });
+  return el("path", { d, fill }, parent);
+}
+
+/* 8×8 pixel icons, drawn at 3px per pixel. */
+const ICONS = {
+  doc:   [".#####..",".#...##.",".#....#.",".#.##.#.",".#....#.",".#.##.#.",".#....#.",".######."],
+  grid:  ["###.###.","#.#.#.#.","###.###.","........","###.###.","#.#.#.#.","###.###.","........"],
+  embed: ["##...##.","##...##.","..#.#...","...#....","..#.#...","##...##.","##...##.","........"],
+  db:    [".#####..","#.....#.",".#####..","#.....#.",".#####..","#.....#.",".#####..","........"],
+  search:[".####...","#....#..","#....#..","#....#..",".####...","....##..",".....##.","......#."],
+  vector:["....####",".....###","....#.##","...#...#","..#.....",".#......","#.......","........"],
+  text:  ["..#.....",".#.#..##","#...#...","#####.##","#...#...","#...#.##","........","........"],
+  rank:  ["......#.","......#.","..#...#.","..#.#.#.","..#.#.#.","#.#.#.#.","#.#.#.#.","########"],
+  spark: ["...#....","...#....","..###...","#######.","..###...","...#....","...#....","........"],
+  check: ["........","......#.",".....##.","#...##..","##.##...",".###....","..#.....","........"],
+};
+function pxIcon(rows, x, y, P, fill, parent) {
+  let d = "";
+  rows.forEach((row, r) => { for (let c = 0; c < row.length; c++) if (row[c] === "#") d += `M${x+c*P} ${y+r*P}h${P}v${P}h${-P}z`; });
+  return el("path", { d, fill }, parent);
+}
+
+function el(tag, attrs = {}, parent = svg, text) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (text != null) e.textContent = text;
+  parent.appendChild(e); return e;
+}
+// Rectangle with the four corners notched by n px: the pixel-art "rounded" box.
+const notch = (x, y, w, h, n) =>
+  `M${x+n} ${y}H${x+w-n}V${y+n}H${x+w}V${y+h-n}H${x+w-n}V${y+h}H${x+n}V${y+h-n}H${x}V${y+n}H${x+n}z`;
+const window_ = (x, y, w, h, n, border, fill, parent) => {   // outer border + inner fill
+  el("path",{d:notch(x,y,w,h,n),fill:border},parent);
+  el("path",{d:notch(x+3,y+3,w-6,h-6,n),fill},parent);
+};
+
+svg.setAttribute("viewBox", `0 0 ${SPEC.view[0]} ${SPEC.view[1]}`);
+svg.setAttribute("aria-label", SPEC.label);
+
+/* ---- arrowhead ---- */
+const defs = el("defs");
+const arrow = el("marker",{id:"arrow",viewBox:"0 0 12 12",refX:9,refY:6,markerWidth:12,markerHeight:12,markerUnits:"userSpaceOnUse",orient:"auto"},defs);
+el("path",{d:"M0 0H4V4H8V8H4V12H0z",fill:C.edge},arrow);
+
+/* ---- lanes: RPG windows with a title tab ---- */
+SPEC.lanes.forEach(l => {
+  el("path",{d:notch(l.x+4,l.y+4,l.w,l.h,6),fill:C.shadow});
+  window_(l.x, l.y, l.w, l.h, 6, C.laneBorder, C.lane, svg);
+  const tw = textW(l.title, 2), tabW = tw + 32;
+  el("path",{d:notch(l.x+24,l.y-6,tabW,30,3),fill:TONE[l.tone]});
+  pxText(l.title, l.x+40, l.y+3, 2, C.dark);
+});
+
+/* ---- edges: square-cornered, dashed ---- */
+const N = Object.fromEntries(SPEC.nodes.map(n => [n.id, n]));
+function route(e) {
+  const A = N[e.from], B = N[e.to];
+  if (e.mode === "down") {
+    const x1 = A.x + A.w/2, y1 = A.y + A.h, x2 = B.x + B.w/2, y2 = B.y, m = e.mid ?? (y1+y2)/2;
+    return { d:`M${x1} ${y1}V${m}H${x2}V${y2}`, lx:(x1+x2)/2, ly:m };
+  }
+  const x1 = A.x + A.w, y1 = A.y + A.h/2, x2 = B.x, y2 = B.y + B.h/2;
+  if (Math.abs(y1-y2) < 1) return { d:`M${x1} ${y1}H${x2}`, lx:(x1+x2)/2, ly:y1 };
+  const m = (x1+x2)/2;
+  return { d:`M${x1} ${y1}H${m}V${y2}H${x2}`, lx:m, ly:(y1+y2)/2 };
+}
+const edges = {}, labels = [];
+SPEC.edges.forEach(e => {
+  const r = route(e);
+  const p = el("path",{d:r.d,class:"flow",fill:"none",stroke:C.edge,"stroke-width":3,"stroke-dasharray":"6 6","marker-end":"url(#arrow)"});
+  if (e.label) labels.push({ e, r });
+  edges[e.id] = { path:p, len:p.getTotalLength(), tone:e.tone, from:e.from, to:e.to };
+});
+labels.forEach(({ e, r }) => { // drawn over the line so the text sits inline on it
+  const w = textW(e.label, 2);
+  el("rect",{x:r.lx - w/2 - 4, y:r.ly - 11, width:w + 8, height:22, fill:C.lane});
+  pxText(e.label, Math.round(r.lx - w/2), Math.round(r.ly - 7), 2, C.muted);
+});
+
+/* ---- nodes ---- */
+const nodes = {};
+SPEC.nodes.forEach(n => {
+  const c = TONE[n.tone], g = el("g");
+  el("path",{d:notch(n.x+4,n.y+4,n.w,n.h,3),fill:C.shadow},g);
+  window_(n.x, n.y, n.w, n.h, 3, c, C.node, g);
+  const tint = el("path",{d:notch(n.x+3,n.y+3,n.w-6,n.h-6,3),fill:c,opacity:0},g);
+  const flash = el("path",{d:notch(n.x,n.y,n.w,n.h,3)+notch(n.x+3,n.y+3,n.w-6,n.h-6,3),"fill-rule":"evenodd",fill:"#fff",opacity:0},g);
+  pxIcon(ICONS[n.icon], n.x+18, n.y+30, 3, c, g);
+  const tx = n.x + 54, room = n.w - 54 - 12;
+  const tp = textW(n.t, 3) <= room ? 3 : 2;   // shrink a long title one step
+  pxText(n.t, tx, n.y+20, tp, C.ink, g);
+  pxText(n.s, tx, n.y+50, 2, C.muted, g);
+  nodes[n.id] = { tint, flash };
+});
+
+/* ---- particles: a coin with a short square trail, moving in 3px steps ---- */
+const snap = v => Math.round(v / 3) * 3;
+const comets = {};
+for (const id in edges) {
+  const g = el("g",{opacity:0});
+  const trail = [12, 24, 36].map((_, i) => el("rect",{width:6-i,height:6-i,fill:TONE[edges[id].tone],opacity:.55-i*.17},g));
+  const body = el("rect",{width:9,height:9,fill:C.coin},g);
+  const shine = el("rect",{width:3,height:3,fill:"#fff"},g);
+  comets[id] = { g, trail, body, shine };
+}
+
+/* ---- activation: a node blinks when a coin arrives (or departs, for sources) ---- */
+const T = SPEC.timeline, HOLD = 1.2;
+const incoming = new Set(T.steps.map(([id]) => edges[id].to));
+const hits = [];
+{
+  const seen = new Set();
+  T.steps.forEach(([id,s,d]) => {
+    const {from,to} = edges[id];
+    if (!incoming.has(from) && !seen.has(from)) { hits.push([from, s]); seen.add(from); }
+    hits.push([to, s+d]);
+  });
+}
+
+function frame(tm) {
+  const tt = tm % T.cycle;
+  T.steps.forEach(([id,s,d]) => {
+    const E = edges[id], K = comets[id], p = (tt - s) / d;
+    if (p > 0 && p < 1) {
+      const at = q => E.path.getPointAtLength(Math.max(0, E.len*p - q));
+      const h = at(0);
+      K.body.setAttribute("x", snap(h.x) - 4.5); K.body.setAttribute("y", snap(h.y) - 4.5);
+      K.shine.setAttribute("x", snap(h.x) - 4.5); K.shine.setAttribute("y", snap(h.y) - 4.5);
+      K.trail.forEach((r,i) => { const pt = at((i+1)*12), s = 6-i; r.setAttribute("x", snap(pt.x) - s/2); r.setAttribute("y", snap(pt.y) - s/2); });
+      K.g.setAttribute("opacity", 1);
+    } else K.g.setAttribute("opacity", 0);
+  });
+  const lit = {};
+  hits.forEach(([id,at]) => {
+    const a = tt - at;
+    if (a > 0 && a < HOLD) lit[id] = Math.max(lit[id] || 0, 1 - a/HOLD);
+  });
+  for (const id in nodes) {
+    const v = lit[id] || 0, a = HOLD * (1 - v), n = nodes[id];
+    n.flash.setAttribute("opacity", v && a < .5 && Math.floor(a*10) % 2 === 0 ? 1 : 0);   // blink
+    n.tint.setAttribute("opacity", Math.ceil(v*4) / 4 * .3);                              // stepped fade
+  }
+}
+
+// Reduced motion: leave the diagram static.
+if (!reduce) {
+  const t0 = performance.now();
+  const loop = now => { frame((now - t0)/1000); requestAnimationFrame(loop); };
+  requestAnimationFrame(loop);
+}
+</script>
+</body>
+</html>

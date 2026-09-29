@@ -1,6 +1,6 @@
 ---
 name: animated-flow-diagram
-description: Build a self-contained animated HTML flow diagram in one of three themes — "whiteboard" (hand-drawn pastel rounded boxes in themed panels, glowing dots, alternating outcomes), or the modern "dark" and "light" themes (glass cards with icons, lanes, and comet particles). All have rounded orthogonal arrows and nodes that pulse as the flow arrives. Use when the user asks for an animated diagram, flow/pipeline/architecture/process animation, "diagram like system1-vs-system2", a side-by-side comparison of two flows, or any boxes-and-arrows explainer they want animated in HTML.
+description: Build a self-contained animated HTML flow diagram in one of four themes — "whiteboard" (hand-drawn pastel rounded boxes in themed panels, glowing dots, alternating outcomes), or the modern "dark" and "light" themes (cards with icons, lanes, and comet particles), or "pixel" (retro 8-bit game UI with a bitmap font and coin particles). All have rounded orthogonal arrows and nodes that pulse as the flow arrives. Use when the user asks for an animated diagram, flow/pipeline/architecture/process animation, "diagram like system1-vs-system2", a side-by-side comparison of two flows, or any boxes-and-arrows explainer they want animated in HTML.
 ---
 
 # Animated flow diagram
@@ -17,6 +17,7 @@ Pick one per diagram. If the user doesn't say, use **dark**.
 | `whiteboard` | `assets/template.html` | playful, hand-drawn, pastel; side-by-side comparisons; alternating outcomes (variants) | `examples/rag-pipeline.html` |
 | `dark` | `assets/template-dark.html` | polished, dark product/architecture look; grouped lanes; icons | `examples/rag-pipeline-dark.html` |
 | `light` | `assets/template-light.html` | same as `dark` on a clean white page, for docs, slides and light-mode sites | `examples/rag-pipeline-light.html` |
+| `pixel` | `assets/template-pixel.html` | playful retro-game look: pixel font, notched boxes, coin particles | `examples/rag-pipeline-pixel.html` |
 
 Everything below is written for `whiteboard`. `dark` and `light` share one engine and SPEC
 shape (they differ only in colours), described in **Dark and light themes** at the end.
@@ -26,7 +27,7 @@ shape (they differ only in colours), described in **Dark and light themes** at t
 1. **Understand the flow.** List the stages, what feeds what, where it branches, and which
    branches are alternatives (only one happens per run) versus parallel (all happen at once).
    If the user gave a vague prompt, pick a sensible flow yourself; don't interrogate them.
-2. **Copy the template** for the chosen theme. `cp ~/.claude/skills/animated-flow-diagram/assets/template.html <out>.html` (or `template-dark.html` / `template-light.html`)
+2. **Copy the template** for the chosen theme. `cp ~/.claude/skills/animated-flow-diagram/assets/template.html <out>.html` (or `template-dark.html` / `template-light.html` / `template-pixel.html`)
    (default `<out>` = a kebab-case name of the topic in the current directory). Change `<title>`.
 3. **Replace `SPEC`** (everything between `const SPEC = {` and the closing `};`). Don't
    edit the engine unless the user asks for a new capability.
@@ -121,3 +122,18 @@ SPEC is interchangeable between the two, so you can switch a diagram's theme by 
 - `timeline` is a single `{cycle, steps:[[edgeId,start,dur]…]}`: no variants and no dashed edges.
   Same timing guidance as above: parallel siblings share a `start`, `cycle` = last end + ~1.5 s.
 - Always screenshot and check for clipped subtitles and lines crossing nodes.
+
+## Pixel theme
+
+Same SPEC shape as dark/light (lanes, nodes with `icon`, edges, `timeline`), so a SPEC ports across
+with a few text edits. Differences to respect:
+
+- The font is a built-in **5×7 bitmap, UPPERCASE only**; write `t` and `s` in caps. Titles render at
+  3px per pixel: keep `t` to about 6–7 characters (`s` about 10). A long title drops one size
+  automatically, but anything wider still overflows, so shorten the words instead.
+- Supported characters: A–Z, 0–9, space and `. , - + : / ( ) < > · → ?`. Anything else prints `?`.
+- Nodes are ~190×84 and columns need gaps of about 65+; edge labels (`DENSE`, `LOOKUP`) are drawn
+  inline on the line and need roughly 12px per letter of clear line.
+- Edges have square corners (no rounding) and the coin moves in 3px steps by design.
+- Icons are 8×8 bitmaps in `ICONS` (doc, grid, embed, db, search, vector, text, rank, spark, check);
+  add new ones as eight 8-character strings of `#` and `.`.
