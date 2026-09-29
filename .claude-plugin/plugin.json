@@ -1,0 +1,8 @@
+{
+  "name": "animated-flow-diagram",
+  "description": "Build self-contained animated HTML flow diagrams in a hand-drawn whiteboard style from a plain-language prompt.",
+  "version": "1.0.0",
+  "author": { "name": "zutao" },
+  "license": "MIT",
+  "keywords": ["diagram", "animation", "svg", "flowchart", "skill"]
+}

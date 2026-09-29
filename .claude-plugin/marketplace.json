@@ -1,0 +1,11 @@
+{
+  "name": "animated-flow-diagram",
+  "owner": { "name": "zutao" },
+  "plugins": [
+    {
+      "name": "animated-flow-diagram",
+      "source": "./",
+      "description": "Build self-contained animated HTML flow diagrams in a hand-drawn whiteboard style from a plain-language prompt."
+    }
+  ]
+}

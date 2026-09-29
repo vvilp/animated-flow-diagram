@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>System 1 vs System 2</title>
+<style>
+  :root { --bg:#fff; --ink:#1f2430; --muted:#7b8190; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#14161c; --ink:#eef0f5; --muted:#9aa1b2; } }
+  html,body { margin:0; background:var(--bg); color:var(--ink);
+    font-family:"Comic Sans MS","Chalkboard SE","Segoe Print","Comic Neue",system-ui,sans-serif; }
+  .wrap { max-width:1100px; margin:0 auto; padding:16px; }
+  h1 { font-size:clamp(20px,3.2vw,30px); font-weight:800; text-align:center; margin:4px 0 10px; }
+  svg { width:100%; height:auto; display:block; }
+  /* The diagram is a light "whiteboard card" in both themes, so its ink is fixed. */
+  .node text { font-size:15px; font-weight:700; fill:#1f2430; }
+  .cap  { font-size:12.5px; fill:#6b7180; }
+  .pill { font-size:22px; font-weight:800; fill:#1f2430; }
+  .edge { fill:none; stroke-width:2.4; stroke-linecap:round; stroke-linejoin:round; }
+  .dash { stroke-dasharray:6 5; }
+  .elabel { font-size:12px; font-weight:700; fill:#6b7180; paint-order:stroke; stroke:#fff; stroke-width:4px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+<svg id="d" role="img"></svg>
+</div>
+
+<script>
+/* =====================================================================
+   SPEC — the only part you should need to edit.
+   Coordinates are SVG user units. Nodes: {x,y} is the top-left corner.
+   ===================================================================== */
+const SPEC = {
+  label: "System 1 vs System 2 AI harness flow diagrams",
+
+  panels: [
+    { x:10,  y:62, w:527, h:993, theme:"teal", badge:"1", title:"System 1 harness",
+      caption:["Independent inputs merge into one narrow judgment. The code gate","chooses execution or escalation."] },
+    { x:556, y:62, w:526, h:993, theme:"blue", badge:"2", title:"System 2 harness",
+      caption:["Independent inputs guide planning. Tool results merge into verification,","then the loop acts, asks, or replans."] },
+  ],
+
+  // color: purple (inputs) | white (neutral step) | teal (model/thinking) | yellow (gate/human) | blue (action/tool)
+  nodes: [
+    { id:"req", x:62,  y:172, w:175, h:77, color:"purple", label:"Request" },
+    { id:"sta", x:308, y:172, w:177, h:77, color:"purple", label:"Selected state" },
+    { id:"q",   x:170, y:345, w:207, h:80, color:"white",  label:"Typed\nquestion" },
+    { id:"f",   x:168, y:500, w:208, h:80, color:"teal",   label:"Fast model\njudgment" },
+    { id:"g",   x:168, y:655, w:208, h:80, color:"yellow", label:"Confidence +\npolicy gate" },
+    { id:"exe", x:62,  y:867, w:175, h:76, color:"blue",   label:"Execute" },
+    { id:"esc", x:308, y:867, w:177, h:76, color:"yellow", label:"Escalate" },
+
+    { id:"goal", x:587, y:172, w:152, h:77, color:"purple", label:"Goal" },
+    { id:"con",  x:747, y:172, w:143, h:77, color:"purple", label:"Constraints" },
+    { id:"cur",  x:907, y:172, w:143, h:77, color:"purple", label:"Current\nstate" },
+    { id:"plan", x:720, y:305, w:200, h:72, color:"teal",   label:"LLM planner /\nreasoner" },
+    { id:"rt",   x:720, y:436, w:200, h:72, color:"white",  label:"Guarded tool\nrouter" },
+    { id:"s",    x:587, y:575, w:128, h:72, color:"blue",   label:"Search" },
+    { id:"a",    x:755, y:575, w:128, h:72, color:"blue",   label:"APIs" },
+    { id:"c",    x:922, y:575, w:128, h:72, color:"blue",   label:"Code" },
+    { id:"ob",   x:720, y:718, w:200, h:72, color:"teal",   label:"Observe +\nverify" },
+    { id:"fin",  x:587, y:902, w:128, h:72, color:"blue",   label:"Final\nAction" },
+    { id:"ask",  x:755, y:902, w:128, h:72, color:"yellow", label:"Ask\nUser" },
+    { id:"rep",  x:922, y:902, w:128, h:72, color:"yellow", label:"Replan" },
+  ],
+
+  /* Edges are routed automatically as rounded orthogonal elbows.
+       from/to     node ids
+       ink         "teal" | "blue" | "purple" | "amber"  (the panel's edge color)
+       dashed      true for optional / fallback / loop-back paths (renders grey)
+       dir         "v" (bottom→top, default) | "h" (right side → left side)
+       fx / tx     offset of the start / end anchor along the node side (px from centre)
+       mid         y (for "v") or x (for "h") of the elbow; default halfway
+       d           raw SVG path — overrides routing (use for loop-backs around the side)
+       label       optional small text placed at the elbow                            */
+  edges: [
+    { id:"l_req", from:"req", to:"q", ink:"teal", tx:-56, mid:300 },
+    { id:"l_sta", from:"sta", to:"q", ink:"teal", tx: 54, mid:300 },
+    { id:"l_q",   from:"q",   to:"f", ink:"teal", fx:-1.5, tx:0 },
+    { id:"l_f",   from:"f",   to:"g", ink:"teal" },
+    { id:"l_exe", from:"g",   to:"exe", ink:"teal", fx:-47, mid:815 },
+    { id:"l_esc", from:"g",   to:"esc", ink:"teal", fx: 50, mid:760, dashed:true },
+
+    { id:"r_goal", from:"goal", to:"plan", ink:"blue", tx:-60, mid:285 },
+    { id:"r_con",  from:"con",  to:"plan", ink:"blue", fx:1.5, tx:0 },
+    { id:"r_cur",  from:"cur",  to:"plan", ink:"blue", tx: 60, mid:285 },
+    { id:"r_plan", from:"plan", to:"rt",   ink:"blue" },
+    { id:"r_s", from:"rt", to:"s", ink:"blue", fx:-49, mid:540 },
+    { id:"r_a", from:"rt", to:"a", ink:"blue", tx:-1 },
+    { id:"r_c", from:"rt", to:"c", ink:"blue", fx: 47, mid:540 },
+    { id:"o_s", from:"s", to:"ob", ink:"blue", tx:-52, mid:680 },
+    { id:"o_a", from:"a", to:"ob", ink:"blue", tx:-1 },
+    { id:"o_c", from:"c", to:"ob", ink:"blue", tx: 50, mid:680 },
+    { id:"x_fin", from:"ob", to:"fin", ink:"blue", fx:-64, mid:862 },
+    { id:"x_ask", from:"ob", to:"ask", ink:"blue", dashed:true, tx:1 },
+    { id:"x_rep", from:"ob", to:"rep", ink:"blue", fx: 62, mid:825, dashed:true },
+    { id:"x_loop", from:"rep", to:"plan", ink:"blue", dashed:true,
+      d:"M1050 938 H1062 V350 Q1062 341 1053 341 H930" },
+  ],
+
+  /* One timeline per independent animation (usually one per panel).
+       cycle     seconds per loop
+       variants  how many alternative outcomes rotate across cycles (1 = always the same)
+       steps     [edgeId, startSec, durSec, variant?] — a dot travels the edge.
+                 A step with a variant only plays on cycles where (cycle# % variants) === variant.
+     Glows are automatic: the target node glows when the dot arrives; a node with no incoming
+     step in the timeline glows just before its first outgoing dot leaves. Use `hits`
+     ([nodeId, atSec, variant?]) only for extra glows.                                   */
+  timelines: [
+    { cycle:6.4, variants:2, steps:[
+        ["l_req",.3,.8], ["l_sta",.3,.8], ["l_q",1.5,.6], ["l_f",2.4,.6],
+        ["l_exe",3.3,.9,0], ["l_esc",3.3,.9,1] ] },
+    { cycle:9.4, variants:3, steps:[
+        ["r_goal",.3,.8], ["r_con",.3,.8], ["r_cur",.3,.8], ["r_plan",1.5,.6],
+        ["r_s",2.5,.8], ["r_a",2.5,.8], ["r_c",2.5,.8],
+        ["o_s",3.6,.8], ["o_a",3.6,.8], ["o_c",3.6,.8],
+        ["x_fin",4.9,.9,0], ["x_ask",4.9,.9,1], ["x_rep",4.9,.9,2], ["x_loop",6,1.6,2] ] },
+  ],
+};
+
+/* =====================================================================
+   ENGINE — no edits needed below this line.
+   ===================================================================== */
+const NS = "http://www.w3.org/2000/svg";
+const svg = document.getElementById("d");
+const NODE = { // fill, stroke
+  purple:["#f6eafc","#c79be0"], teal:["#e8f5f1","#5fae9b"], white:["#ffffff","#d5d8de"],
+  yellow:["#fdf1d6","#ecc568"], blue:["#e9f0fb","#8fb0e6"]
+};
+const PANEL = { // panel fill, panel stroke, pill fill, badge dot, edge ink
+  teal:  ["#eef7f4","#8cc4b5","#d4ebe4","#5fae9b","#2f7d6b"],
+  blue:  ["#eef2fc","#9fb8e8","#d7e2f8","#6b93e0","#4a78c2"],
+  purple:["#f6f0fc","#c9a8e6","#eadcf7","#a574d6","#7b4bb8"],
+  amber: ["#fdf7ea","#e6c77a","#f8e7bd","#d9a53a","#a8741a"],
+};
+const DASH = "#a5a8b0", DASH_DOT = "#8d919c", GLOW = "#f5a623";
+const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+function el(tag, attrs = {}, parent = svg, text) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (text != null) e.textContent = text;
+  parent.appendChild(e); return e;
+}
+
+/* ---- viewBox from panels (or nodes if no panels) ---- */
+{
+  const boxes = SPEC.panels.length ? SPEC.panels : SPEC.nodes;
+  const x0 = Math.min(...boxes.map(b=>b.x)) - 10, y0 = Math.min(...boxes.map(b=>b.y)) - 10;
+  const x1 = Math.max(...boxes.map(b=>b.x+b.w)) + 10, y1 = Math.max(...boxes.map(b=>b.y+b.h)) + 38;
+  svg.setAttribute("viewBox", `${x0} ${y0} ${x1-x0} ${y1-y0}`);
+  svg.setAttribute("aria-label", SPEC.label);
+}
+
+/* ---- markers ---- */
+const defs = el("defs");
+const marker = {};
+function markerFor(color) {
+  if (marker[color]) return marker[color];
+  const id = "m" + Object.keys(marker).length;
+  const m = el("marker", {id,viewBox:"0 0 10 10",refX:8,refY:5,markerWidth:7,markerHeight:7,orient:"auto-start-reverse"}, defs);
+  el("path",{d:"M0 0 L10 5 L0 10 z",fill:color},m);
+  return marker[color] = `url(#${id})`;
+}
+
+/* ---- panels ---- */
+SPEC.panels.forEach(p => {
+  const [fill, stroke, pill, dot] = PANEL[p.theme];
+  el("rect", {x:p.x,y:p.y,width:p.w,height:p.h,rx:22,fill,stroke,"stroke-width":1.5});
+  if (p.title) {
+    const cx = p.x + p.w/2, py = p.y + 18;
+    const bg = el("rect", {y:py,height:42,rx:21,fill:pill});
+    const t = el("text", {y:py+28,"text-anchor":"middle",class:"pill"}, svg, p.title);
+    const tw = t.getComputedTextLength(), badgeW = p.badge ? 34 : 0;
+    const w = tw + badgeW + 56, left = cx - w/2;
+    bg.setAttribute("x", left); bg.setAttribute("width", w);
+    t.setAttribute("x", left + 28 + badgeW + tw/2);
+    if (p.badge) {
+      el("circle", {cx:left+35,cy:py+21,r:11,fill:dot});
+      el("text", {x:left+35,y:py+26,"text-anchor":"middle",fill:"#fff","font-size":13,"font-weight":800}, svg, p.badge);
+    }
+  }
+  (p.caption||[]).forEach((s,i,a) =>
+    el("text", {x:p.x+p.w/2, y:p.y+p.h-19-(a.length-1-i)*17, "text-anchor":"middle", class:"cap"}, svg, s));
+});
+
+/* ---- edges (drawn before nodes so nodes sit on top) ---- */
+const N = Object.fromEntries(SPEC.nodes.map(n => [n.id, n]));
+function route(e) {
+  const A = N[e.from], B = N[e.to], R = 10;
+  if (e.dir === "h") {
+    const x1 = A.x + A.w, y1 = A.y + A.h/2 + (e.fx||0), x2 = B.x, y2 = B.y + B.h/2 + (e.tx||0);
+    if (Math.abs(y1-y2) < 1) return { d:`M${x1} ${y1} H${x2}`, lx:(x1+x2)/2, ly:y1 };
+    const m = e.mid ?? (x1+x2)/2, s = Math.sign(y2-y1), r = Math.min(R, Math.abs(y2-y1)/2);
+    return { d:`M${x1} ${y1} H${m-r} Q${m} ${y1} ${m} ${y1+s*r} V${y2-s*r} Q${m} ${y2} ${m+r} ${y2} H${x2}`, lx:(m+x2)/2, ly:y2 };
+  }
+  const x1 = A.x + A.w/2 + (e.fx||0), y1 = A.y + A.h, x2 = B.x + B.w/2 + (e.tx||0), y2 = B.y;
+  if (Math.abs(x1-x2) < 1) return { d:`M${x1} ${y1} V${y2}`, lx:x1, ly:(y1+y2)/2 };
+  const m = e.mid ?? (y1+y2)/2, s = Math.sign(x2-x1), r = Math.min(R, Math.abs(x2-x1)/2);
+  return { d:`M${x1} ${y1} V${m-r} Q${x1} ${m} ${x1+s*r} ${m} H${x2-s*r} Q${x2} ${m} ${x2} ${m+r} V${y2}`, lx:(x1+x2)/2, ly:m };
+}
+const edges = {};
+SPEC.edges.forEach(e => {
+  const ink = PANEL[e.ink][4], color = e.dashed ? DASH : ink;
+  const r = e.d ? { d:e.d } : route(e);
+  const p = el("path", {d:r.d, class:"edge"+(e.dashed?" dash":""), stroke:color, "marker-end":markerFor(color)});
+  if (e.label && r.lx != null) el("text", {x:r.lx, y:r.ly-6, "text-anchor":"middle", class:"elabel"}, svg, e.label);
+  edges[e.id] = { path:p, len:p.getTotalLength(), dot: e.dashed ? DASH_DOT : ink, from:e.from, to:e.to };
+});
+
+/* ---- nodes ---- */
+const glows = {};
+SPEC.nodes.forEach(n => {
+  const [fill, stroke] = NODE[n.color];
+  const g = el("g", {class:"node"});
+  glows[n.id] = el("rect", {x:n.x-6,y:n.y-6,width:n.w+12,height:n.h+12,rx:18,fill:"none",stroke:GLOW,"stroke-width":4,opacity:0}, g);
+  el("rect", {x:n.x,y:n.y,width:n.w,height:n.h,rx:13,fill,stroke,"stroke-width":1.6}, g);
+  const lines = n.label.split("\n");
+  lines.forEach((ln,i) => el("text", {x:n.x+n.w/2, y:n.y+n.h/2+5+(i-(lines.length-1)/2)*18, "text-anchor":"middle"}, g, ln));
+});
+
+/* ---- dots (on top of everything) ---- */
+const dots = {};
+for (const id in edges) dots[id] = el("circle", {r:5.5,fill:edges[id].dot,opacity:0,stroke:"#fff","stroke-width":1.5});
+
+/* ---- derive glow hits from steps ---- */
+SPEC.timelines.forEach(T => {
+  T.variants = T.variants || 1;
+  const hits = [...(T.hits||[])];
+  const incoming = new Set(T.steps.map(([id]) => edges[id].to));
+  const seen = new Set();
+  T.steps.forEach(([id,s,d,v]) => {
+    const {from, to} = edges[id];
+    if (!incoming.has(from) && !seen.has(from)) { hits.push([from, Math.max(0, s-.2), v]); seen.add(from); }
+    hits.push([to, s+d, v]);
+  });
+  T.allHits = hits;
+});
+
+function frame(tm, T) {
+  const tt = tm % T.cycle, v = Math.floor(tm / T.cycle) % T.variants;
+  T.steps.forEach(([id,s,d,variant]) => {
+    const dot = dots[id], p = (tt - s) / d;
+    if ((variant === undefined || variant === v) && p > 0 && p < 1) {
+      const pt = edges[id].path.getPointAtLength(edges[id].len * p);
+      dot.setAttribute("cx", pt.x); dot.setAttribute("cy", pt.y); dot.setAttribute("opacity", 1);
+    } else dot.setAttribute("opacity", 0);
+  });
+  const glowNow = {};
+  T.allHits.forEach(([id,at,variant]) => {
+    glowNow[id] = glowNow[id] || 0;
+    if (variant !== undefined && variant !== v) return;
+    const a = tt - at;
+    if (a > 0 && a < 1.1) glowNow[id] = Math.max(glowNow[id], 1 - a/1.1);
+  });
+  for (const id in glowNow) glows[id].setAttribute("opacity", glowNow[id]);
+}
+
+// Reduced motion: leave the diagram static.
+if (!reduce) {
+  const t0 = performance.now();
+  const loop = now => { SPEC.timelines.forEach(T => frame((now - t0) / 1000, T)); requestAnimationFrame(loop); };
+  requestAnimationFrame(loop);
+}
+</script>
+</body>
+</html>
