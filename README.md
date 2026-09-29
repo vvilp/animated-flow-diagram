@@ -14,6 +14,12 @@ Three themes:
 
 Say "dark", "light" or "whiteboard" in your prompt to choose.
 
+
+
+https://github.com/user-attachments/assets/4b292629-68ed-4d30-ae7e-eedcd09c6226
+
+
+
 ## Install
 
 In Claude Code:
