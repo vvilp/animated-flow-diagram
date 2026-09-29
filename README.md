@@ -5,6 +5,11 @@ animated HTML flow diagram: pastel rounded nodes in themed panels, rounded elbow
 dots travelling along the edges, glowing nodes as the flow arrives, and alternating
 outcomes on each loop. No dependencies, no build step.
 
+<iframe src="https://carinalab.blob.core.windows.net/carinalab-public/2026/09/09da1f8a527d43a9b74f7096458b210e.html?theme=light"
+        title="Trending AI agent repos" loading="lazy"
+        sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
+        style="width:100%;height:1200px;border:0"></iframe>
+
 ## Install
 
 In Claude Code:
